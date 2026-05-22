@@ -6,9 +6,9 @@ local Productivity  = require("scripts.productivity")
 script.on_init(State.init)
 
 -- On configuration change, reset caches, destroy all hidden beacons, and
--- re-apply state from tracked entities. Any always-invulnerable entities
--- already in ssTracked are re-made invulnerable; foundation buildings get
--- their tier re-evaluated with the (possibly updated) tile lists.
+-- re-apply state. Always-invulnerable entities are scanned across all surfaces
+-- so pre-existing entities in saves that didn't have the mod installed are
+-- covered. Foundation buildings are re-evaluated from ssTracked.
 script.on_configuration_changed(function()
 	for _, surface in pairs(game.surfaces) do
 		for _, beacon in pairs(surface.find_entities_filtered { name = "ss-productivity-beacon" }) do
@@ -20,14 +20,20 @@ script.on_configuration_changed(function()
 	Tiles.resetCache()
 	State.init()
 
+	for _, surface in pairs(game.surfaces) do
+		for _, entity in pairs(surface.find_entities_filtered { type = Invulnerability.SCAN_TYPES }) do
+			if entity.valid and Invulnerability.isAlwaysInvulnerable(entity) then
+				Invulnerability.makeInvulnerable(entity)
+			end
+		end
+	end
+
 	local toRemove = {}
 	for uid, tracked in pairs(storage.ssTracked) do
 		local entity = tracked.entity
 		if not (entity and entity.valid) then
 			toRemove[#toRemove + 1] = uid
-		elseif Invulnerability.isAlwaysInvulnerable(entity) then
-			Invulnerability.makeInvulnerable(entity)
-		else
+		elseif not Invulnerability.isAlwaysInvulnerable(entity) then
 			local tier = Tiles.getEntityFoundationTier(entity)
 			if tier then
 				Invulnerability.makeInvulnerable(entity)
